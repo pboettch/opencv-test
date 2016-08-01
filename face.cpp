@@ -2,51 +2,75 @@
 #include <opencv/highgui.h>
 #include <opencv/ml.h>
 
-void doMosaic(IplImage *in, int x, int y,
-              int width, int height, int size);
+/* TODO */
+// #include <parrot/image-pipeline.h>
+struct parrot_image_meta {
+	size_t x, y;
+	enum {
+		RGB_WHATEVER,
+	} format;
+};
 
+static void doMosaic(IplImage *in, int x0, int y0, int width, int height, int size);
 
+struct user_priv {
+	/* private user's algo */
+	CvMemStorage *storage;
+	CvHaarClassifierCascade *cascade;
+	CvSeq *faces;
+	int skip;
+};
+
+/* path to xml-files */
+#define CASCADE_NAME "/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml"
+
+static void user_handle_one_image(void *image_data, const struct parrot_image_meta *info, void *priv)
+{
+	struct user_priv *p = reinterpret_cast<struct user_priv *>(priv);
+	IplImage *src_img = reinterpret_cast<IplImage *>(image_data),
+	         *src_gray = 0;
+
+	if (p->skip-- <= 0) {
+		src_gray = cvCreateImage(cvGetSize(src_img), IPL_DEPTH_8U, 1);
+		cvClearMemStorage(p->storage);
+		cvCvtColor(src_img, src_gray, CV_BGR2GRAY);
+		cvEqualizeHist(src_gray, src_gray);
+
+		p->faces = cvHaarDetectObjects(src_gray, p->cascade, p->storage,
+		                               1.11, 4, 0, cvSize(40, 40));
+		p->skip = 4;
+	}
+	for (int i = 0; i < (p->faces ? p->faces->total : 0); i++) {
+		CvRect *r = (CvRect *) cvGetSeqElem(p->faces, i);
+		doMosaic(src_img, r->x, r->y, r->width, r->height, 20);
+	}
+
+	cvReleaseImage(&src_gray);
+}
 
 int main(int argc, char **argv)
 {
-	int i, c;
+	/* init user-data */
+	struct user_priv p = {0};
+	p.cascade = (CvHaarClassifierCascade *) cvLoad(CASCADE_NAME, 0, 0, 0);
+	p.storage = cvCreateMemStorage(0);
 
-	int skip = 0;
-
-	IplImage *src_img = 0, *src_gray = 0;
-	const char *cascade_name = "/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml";
-	CvHaarClassifierCascade *cascade = 0;
-	CvMemStorage *storage = 0;
-	CvSeq *faces;
-
-	cascade = (CvHaarClassifierCascade *) cvLoad(cascade_name, 0, 0, 0);
 	cvNamedWindow("Capture", CV_WINDOW_AUTOSIZE);
 	CvCapture *capture = cvCreateCameraCapture(0);
 	assert(capture != NULL);
 
-	storage = cvCreateMemStorage(0);
+	struct parrot_image_meta meta = {
+	    640, 480, parrot_image_meta::RGB_WHATEVER,
+	};
+
 	while (1) {
-		src_img = cvQueryFrame(capture);
-		src_gray = cvCreateImage(cvGetSize(src_img), IPL_DEPTH_8U, 1);
+		IplImage *src_img = cvQueryFrame(capture);
 
-		if (skip-- == 0) {
-			cvClearMemStorage(storage);
-			cvCvtColor(src_img, src_gray, CV_BGR2GRAY);
-			cvEqualizeHist(src_gray, src_gray);
-
-			faces = cvHaarDetectObjects(src_gray, cascade, storage,
-			                            1.11, 4, 0, cvSize(40, 40));
-			skip = 4;
-		}
-		for (i = 0; i < (faces ? faces->total : 0); i++) {
-			CvRect *r = (CvRect *) cvGetSeqElem(faces, i);
-			doMosaic(src_img, r->x, r->y, r->width, r->height, 20);
-		}
+		user_handle_one_image(src_img, &meta, &p);
 
 		cvShowImage("Capture", src_img);
-		cvReleaseImage(&src_gray);
 
-		c = cvWaitKey(2);
+		int c = cvWaitKey(2);
 		if (c == '\x1b')
 			break;
 	}
@@ -57,8 +81,8 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-void doMosaic(IplImage *in, int x0, int y0,
-              int width, int height, int size)
+static void doMosaic(IplImage *in, int x0, int y0,
+                     int width, int height, int size)
 {
 	int b, g, r, col, row;
 
