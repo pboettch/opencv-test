@@ -1,23 +1,20 @@
-#include <opencv/cv.h>
-#include <opencv/highgui.h>
-#include <opencv/ml.h>
+#include <opencv2/imgproc/imgproc.hpp> /* for equalizeHist */
+#include <opencv2/opencv.hpp>
+#include <vector>
 
 /* TODO */
 // #include <parrot/image-pipeline.h>
 struct parrot_image_meta {
-	size_t x, y;
-	enum {
-		RGB_WHATEVER,
-	} format;
+	size_t width, height;
+	int image_format;
 };
 
 static void doMosaic(IplImage *in, int x0, int y0, int width, int height, int size);
 
 struct user_priv {
-	/* private user's algo */
-	CvMemStorage *storage;
-	CvHaarClassifierCascade *cascade;
-	CvSeq *faces;
+	cv::CascadeClassifier cascade;
+	std::vector<cv::Rect> faces;
+
 	int skip;
 };
 
@@ -27,56 +24,57 @@ struct user_priv {
 static void user_handle_one_image(void *image_data, const struct parrot_image_meta *info, void *priv)
 {
 	struct user_priv *p = reinterpret_cast<struct user_priv *>(priv);
-	IplImage *src_img = reinterpret_cast<IplImage *>(image_data),
-	         *src_gray = 0;
 
+	cv::Mat orig(info->height, info->width, info->image_format, image_data);
+
+	/* only do facedetction once every X images */
 	if (p->skip-- <= 0) {
-		src_gray = cvCreateImage(cvGetSize(src_img), IPL_DEPTH_8U, 1);
-		cvClearMemStorage(p->storage);
-		cvCvtColor(src_img, src_gray, CV_BGR2GRAY);
-		cvEqualizeHist(src_gray, src_gray);
+		cv::Mat gray;
+		cv::cvtColor(orig, gray, CV_BGR2GRAY);
+		cv::equalizeHist(gray, gray);
 
-		p->faces = cvHaarDetectObjects(src_gray, p->cascade, p->storage,
-		                               1.11, 4, 0, cvSize(40, 40));
+		p->cascade.detectMultiScale(gray, p->faces, 1.11, 4, 0, cv::Size(40, 40));
 		p->skip = 4;
 	}
-	for (int i = 0; i < (p->faces ? p->faces->total : 0); i++) {
-		CvRect *r = (CvRect *) cvGetSeqElem(p->faces, i);
-		doMosaic(src_img, r->x, r->y, r->width, r->height, 20);
-	}
 
-	cvReleaseImage(&src_gray);
+	for (auto face : p->faces) {
+		cv::rectangle(orig, face, cv::Scalar(0)); //, CV_FILLED);
+		cv::putText(orig, "chelou celui-la", cv::Point(face.x, face.y - 20),
+		            cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 2);
+
+		//doMosaic(src_img, r->x, r->y, r->width, r->height, 20);
+	}
 }
 
 int main(int argc, char **argv)
 {
+	cv::VideoCapture cap(0); // open the default camera
+	if (!cap.isOpened())     // check if we succeeded
+		return -1;
+
 	/* init user-data */
-	struct user_priv p = {0};
-	p.cascade = (CvHaarClassifierCascade *) cvLoad(CASCADE_NAME, 0, 0, 0);
-	p.storage = cvCreateMemStorage(0);
+	struct user_priv p;
+	p.cascade = cv::CascadeClassifier(CASCADE_NAME);
 
-	cvNamedWindow("Capture", CV_WINDOW_AUTOSIZE);
-	CvCapture *capture = cvCreateCameraCapture(0);
-	assert(capture != NULL);
+	struct parrot_image_meta meta;
 
-	struct parrot_image_meta meta = {
-	    640, 480, parrot_image_meta::RGB_WHATEVER,
-	};
+	/* "connect" */
+	cv::namedWindow("Capture");
 
-	while (1) {
-		IplImage *src_img = cvQueryFrame(capture);
+	for (;;) {
+		cv::Mat frame;
+		cap >> frame; // get a new frame from camera
 
-		user_handle_one_image(src_img, &meta, &p);
+		meta.width = frame.cols;
+		meta.height = frame.rows;
+		meta.image_format = frame.type();
 
-		cvShowImage("Capture", src_img);
+		user_handle_one_image(frame.ptr(), &meta, &p);
 
-		int c = cvWaitKey(2);
-		if (c == '\x1b')
+		cv::imshow("edges", frame);
+		if (cv::waitKey(30) >= 0)
 			break;
 	}
-
-	cvReleaseCapture(&capture);
-	cvDestroyWindow("Capture");
 
 	return 0;
 }
