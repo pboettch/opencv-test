@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.2)
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} /usr/share/opencv)
+find_package(OpenCV REQUIRED)
+
+add_executable(main main.cpp)
+target_link_libraries(main ${OpenCV_LIBS})
+
+add_executable(face face.cpp)
+target_link_libraries(face ${OpenCV_LIBS})
