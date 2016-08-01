@@ -1,6 +1,7 @@
 #include <opencv2/imgproc/imgproc.hpp> /* for equalizeHist */
 #include <opencv2/opencv.hpp>
 #include <vector>
+#include <sstream>
 
 /* TODO */
 // #include <parrot/image-pipeline.h>
@@ -54,9 +55,20 @@ int main(int argc, char **argv)
 	if (!cap.isOpened())     // check if we succeeded
 		return -1;
 
+	std::stringstream s;
+
+	if (!getenv("OPENCV_SHARE")) {
+		std::cerr << "please set a OPENCV_SHARE-environment variable to help me find my xml-files\n";
+		exit(1);
+	}
+
+
+	s << getenv("OPENCV_SHARE")
+	  << "/haarcascades/haarcascade_frontalface_default.xml";
+
 	/* init user-data */
 	struct user_priv p;
-	p.cascade = cv::CascadeClassifier(CASCADE_NAME);
+	p.cascade = cv::CascadeClassifier(s.str());
 
 	struct parrot_image_meta meta;
 
