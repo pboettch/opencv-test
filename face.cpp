@@ -6,10 +6,10 @@
 // #include <parrot/image-pipeline.h>
 struct parrot_image_meta {
 	size_t width, height;
-	int image_format;
+	int image_format; /* apparently it will be yuv or i420 */
 };
 
-static void doMosaic(IplImage *in, int x0, int y0, int width, int height, int size);
+//static void doMosaic(IplImage *in, int x0, int y0, int width, int height, int size);
 
 struct user_priv {
 	cv::CascadeClassifier cascade;
@@ -27,6 +27,8 @@ static void user_handle_one_image(void *image_data, const struct parrot_image_me
 
 	cv::Mat orig(info->height, info->width, info->image_format, image_data);
 
+	// yuv or i420
+
 	/* only do facedetction once every X images */
 	if (p->skip-- <= 0) {
 		cv::Mat gray;
@@ -38,7 +40,7 @@ static void user_handle_one_image(void *image_data, const struct parrot_image_me
 	}
 
 	for (auto face : p->faces) {
-		cv::rectangle(orig, face, cv::Scalar(0)); //, CV_FILLED);
+		cv::rectangle(orig, face, cv::Scalar(255), 2); //, CV_FILLED - thickness);
 		cv::putText(orig, "chelou celui-la", cv::Point(face.x, face.y - 20),
 		            cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 2);
 
@@ -71,7 +73,7 @@ int main(int argc, char **argv)
 
 		user_handle_one_image(frame.ptr(), &meta, &p);
 
-		cv::imshow("edges", frame);
+		cv::imshow("Capture", frame);
 		if (cv::waitKey(30) >= 0)
 			break;
 	}
@@ -79,6 +81,7 @@ int main(int argc, char **argv)
 	return 0;
 }
 
+#if 0
 static void doMosaic(IplImage *in, int x0, int y0,
                      int width, int height, int size)
 {
@@ -119,3 +122,4 @@ static void doMosaic(IplImage *in, int x0, int y0,
 		}
 	}
 }
+#endif
