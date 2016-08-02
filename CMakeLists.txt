@@ -2,13 +2,27 @@ cmake_minimum_required(VERSION 3.2)
 
 set(CMAKE_CXX_FLAGS "-Wall")
 
+# add OpenCV-path to find the cmake-module
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} /usr/share/opencv)
 find_package(OpenCV REQUIRED)
 
-add_executable(main main.cpp)
-target_link_libraries(main ${OpenCV_LIBS})
-target_compile_features(main PRIVATE cxx_range_for)
+# face-detect-library with the 'well-defined' interface
+add_library(face-detect face-detect.cpp)
+target_link_libraries(face-detect PRIVATE ${OpenCV_LIBS})
+target_compile_features(face-detect PRIVATE cxx_range_for) # C++11
 
-add_executable(face face.cpp)
-target_link_libraries(face ${OpenCV_LIBS})
-target_compile_features(face PRIVATE cxx_range_for)
+# face-detect-test using the webcam and OpenCV to read from it
+add_executable(webcam-opencv webcam-opencv.cpp)
+target_link_libraries(webcam-opencv ${OpenCV_LIBS} face-detect)
+target_compile_features(webcam-opencv PRIVATE cxx_range_for) # C++11
+
+
+
+
+
+#add_executable(main main.cpp)
+#target_link_libraries(main ${OpenCV_LIBS})
+#target_compile_features(main PRIVATE cxx_range_for)
+#
+add_executable(webcam-test webcam.c)
+#target_link_libraries(webcam-test opencv-face-detect)

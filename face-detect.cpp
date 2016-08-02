@@ -1,28 +1,45 @@
 #include <opencv2/imgproc/imgproc.hpp> /* for equalizeHist */
 #include <opencv2/opencv.hpp>
-#include <vector>
+
 #include <sstream>
+#include <vector>
 
-/* TODO */
-// #include <parrot/image-pipeline.h>
-struct parrot_image_meta {
-	size_t width, height;
-	int image_format; /* apparently it will be yuv or i420 */
-};
-
-//static void doMosaic(IplImage *in, int x0, int y0, int width, int height, int size);
+#include "parrot-image-process.h" /* for parrot_image_meta-struct */
+#include "face-detect.h"
 
 struct user_priv {
 	cv::CascadeClassifier cascade;
 	std::vector<cv::Rect> faces;
 
-	int skip;
+	int skip_count;
 };
 
 /* path to xml-files */
-#define CASCADE_NAME "/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml"
+#define CASCADE_NAME "/haarcascades/haarcascade_frontalface_default.xml"
 
-static void user_handle_one_image(void *image_data, const struct parrot_image_meta *info, void *priv)
+extern "C" void *face_detect_init()
+{
+	std::stringstream s;
+
+	if (!getenv("OPENCV_SHARE")) {
+		std::cerr << "please set a OPENCV_SHARE-environment variable to help me find my xml-files\n"
+		          << "should be something like '/usr/share/opencv'\n";
+		return nullptr;
+	}
+
+	s << getenv("OPENCV_SHARE")
+	  << CASCADE_NAME;
+
+	/* init user-data */
+	struct user_priv *p = new user_priv;
+	p->cascade = cv::CascadeClassifier(s.str());
+
+	return p;
+}
+
+extern "C" void face_detect_work(void *image_data,
+                                 const struct parrot_image_meta *info,
+                                 void *priv)
 {
 	struct user_priv *p = reinterpret_cast<struct user_priv *>(priv);
 
@@ -31,13 +48,13 @@ static void user_handle_one_image(void *image_data, const struct parrot_image_me
 	// yuv or i420
 
 	/* only do facedetction once every X images */
-	if (p->skip-- <= 0) {
+	if (p->skip_count-- <= 0) {
 		cv::Mat gray;
 		cv::cvtColor(orig, gray, CV_BGR2GRAY);
 		cv::equalizeHist(gray, gray);
 
 		p->cascade.detectMultiScale(gray, p->faces, 1.11, 4, 0, cv::Size(40, 40));
-		p->skip = 4;
+		p->skip_count = 4;
 	}
 
 	for (auto face : p->faces) {
@@ -49,51 +66,13 @@ static void user_handle_one_image(void *image_data, const struct parrot_image_me
 	}
 }
 
-int main(int argc, char **argv)
+extern "C" void face_detect_exit(void *p)
 {
-	cv::VideoCapture cap(0); // open the default camera
-	if (!cap.isOpened())     // check if we succeeded
-		return -1;
-
-	std::stringstream s;
-
-	if (!getenv("OPENCV_SHARE")) {
-		std::cerr << "please set a OPENCV_SHARE-environment variable to help me find my xml-files\n";
-		exit(1);
-	}
-
-
-	s << getenv("OPENCV_SHARE")
-	  << "/haarcascades/haarcascade_frontalface_default.xml";
-
-	/* init user-data */
-	struct user_priv p;
-	p.cascade = cv::CascadeClassifier(s.str());
-
-	struct parrot_image_meta meta;
-
-	/* "connect" */
-	cv::namedWindow("Capture");
-
-	for (;;) {
-		cv::Mat frame;
-		cap >> frame; // get a new frame from camera
-
-		meta.width = frame.cols;
-		meta.height = frame.rows;
-		meta.image_format = frame.type();
-
-		user_handle_one_image(frame.ptr(), &meta, &p);
-
-		cv::imshow("Capture", frame);
-		if (cv::waitKey(30) >= 0)
-			break;
-	}
-
-	return 0;
+	delete reinterpret_cast<struct user_priv *>(p);
 }
 
 #if 0
+/* functions which pixelizes the faces */
 static void doMosaic(IplImage *in, int x0, int y0,
                      int width, int height, int size)
 {
