@@ -23,6 +23,9 @@
 
 #include <linux/videodev2.h>
 
+#include "parrot-image-process.h"
+#include "face-detect.h"
+
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
 struct buffer {
@@ -35,7 +38,10 @@ static int fd = -1;
 struct buffer *buffers;
 static unsigned int n_buffers;
 static int out_buf;
-static int force_format;
+static int force_format = 1;
+
+static void *face_detect_context;
+
 
 static void errno_exit(const char *s)
 {
@@ -110,7 +116,6 @@ static void init_mmap(void)
 
 		if (MAP_FAILED == buffers[n_buffers].start)
 			errno_exit("mmap");
-
 	}
 }
 
@@ -271,10 +276,16 @@ static int read_frame(void)
 
 	assert(buf.index < n_buffers);
 
-	fprintf(stderr, ".");
-	fflush(stderr);
+	struct parrot_image_meta meta = {
+	    .width = 1280,
+	    .height = 720,
+	    .image_format = YUYV, /* YUYV 4.2.2 */
+		.buffer_size = buf.bytesused,
+	};
 
-//	process_image(buffers[buf.index].start, buf.bytesused);
+	face_detect_work(buffers[buf.index].start, &meta, face_detect_context);
+
+//	write(1, buffers[buf.index].start, buf.bytesused);
 
 	if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
 		errno_exit("VIDIOC_QBUF");
@@ -312,7 +323,7 @@ static void mainloop(void)
 		}
 
 		read_frame();
-//			break;
+		//			break;
 		/* EAGAIN - continue select loop. */
 
 		count++;
@@ -350,6 +361,10 @@ int main(int argc, char **argv)
 {
 	dev_name = argc == 2 ? argv[1] : "/dev/video0";
 
+	face_detect_context = face_detect_init();
+	if (!face_detect_context)
+		exit(1);
+
 	open_device();
 	init_device();
 	start_capturing();
@@ -359,6 +374,8 @@ int main(int argc, char **argv)
 	stop_capturing();
 	uninit_device();
 	close_device();
+	face_detect_exit(face_detect_context);
+
 
 	return 0;
 }

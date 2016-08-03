@@ -16,13 +16,6 @@ add_executable(webcam-opencv webcam-opencv.cpp)
 target_link_libraries(webcam-opencv ${OpenCV_LIBS} face-detect)
 target_compile_features(webcam-opencv PRIVATE cxx_range_for) # C++11
 
-
-
-
-
-#add_executable(main main.cpp)
-#target_link_libraries(main ${OpenCV_LIBS})
-#target_compile_features(main PRIVATE cxx_range_for)
-#
-add_executable(webcam-test webcam.c)
-#target_link_libraries(webcam-test opencv-face-detect)
+# face-detect-test using the webcam and v4l2 to read from it
+add_executable(webcam-v4l2 webcam-v4l2.c)
+target_link_libraries(webcam-v4l2 face-detect)

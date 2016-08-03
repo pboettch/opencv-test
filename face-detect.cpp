@@ -4,8 +4,12 @@
 #include <sstream>
 #include <vector>
 
-#include "parrot-image-process.h" /* for parrot_image_meta-struct */
 #include "face-detect.h"
+#include "parrot-image-process.h" /* for parrot_image_meta-struct */
+
+#include <unistd.h>
+
+// #define DEBUG
 
 struct user_priv {
 	cv::CascadeClassifier cascade;
@@ -31,8 +35,14 @@ extern "C" void *face_detect_init()
 	  << CASCADE_NAME;
 
 	/* init user-data */
-	struct user_priv *p = new user_priv;
+	struct user_priv *p = new user_priv();
 	p->cascade = cv::CascadeClassifier(s.str());
+	p->skip_count = 0;
+
+#ifdef DEBUG
+	cv::namedWindow("Capture");
+	cv::namedWindow("Gray");
+#endif
 
 	return p;
 }
@@ -43,26 +53,132 @@ extern "C" void face_detect_work(void *image_data,
 {
 	struct user_priv *p = reinterpret_cast<struct user_priv *>(priv);
 
-	cv::Mat orig(info->height, info->width, info->image_format, image_data);
-
-	// yuv or i420
+	double scale = info->width / 320.0; // width of image where the detection will take place
 
 	/* only do facedetction once every X images */
 	if (p->skip_count-- <= 0) {
+		cv::Mat source;
+		int cvt_code;
+
+		switch (info->image_format) {
+		case parrot_image_meta::YUYV:
+			source = cv::Mat(info->height, info->width, CV_8UC2, image_data);
+			cvt_code = CV_YUV2GRAY_YUYV;
+			break;
+
+		case parrot_image_meta::BGR:
+			source = cv::Mat(info->height, info->width, CV_8UC3, image_data);
+			cvt_code = CV_BGR2GRAY;
+			break;
+
+		default:
+			std::cerr << "unhandled input format\n";
+			return;
+		}
+
 		cv::Mat gray;
-		cv::cvtColor(orig, gray, CV_BGR2GRAY);
+
+		cv::cvtColor(source, gray, cvt_code);
+
+		/* face detectiong works on very small images -> resize it */
+		cv::resize(gray, gray, cv::Size(info->width / scale, info->height / scale));
 		cv::equalizeHist(gray, gray);
+
+#ifdef DEBUG
+		cv::imshow("Gray", gray);
+		cv::waitKey(10);
+#endif
 
 		p->cascade.detectMultiScale(gray, p->faces, 1.11, 4, 0, cv::Size(40, 40));
 		p->skip_count = 4;
 	}
 
-	for (auto face : p->faces) {
-		cv::rectangle(orig, face, cv::Scalar(255), 2); //, CV_FILLED - thickness);
-		cv::putText(orig, "chelou celui-la", cv::Point(face.x, face.y - 20),
+	/* output image */
+	cv::Mat rect_image;
+
+	enum {
+		ONLY_RECT,
+		OVERLAY_EVEN_WITH_EXPENSIVE_COPY,
+	} mode = OVERLAY_EVEN_WITH_EXPENSIVE_COPY;
+
+	/* create target image */
+	switch (mode) {
+	case ONLY_RECT:
+		rect_image = cv::Mat::zeros(info->height, info->width, CV_8UC3);
+		break;
+
+	case OVERLAY_EVEN_WITH_EXPENSIVE_COPY:
+		switch (info->image_format) {
+		case parrot_image_meta::YUYV:
+			cv::cvtColor(cv::Mat(info->height, info->width, CV_8UC2, image_data),
+			             rect_image,
+			             cv::COLOR_YUV2BGR_YUYV); /* conversion and copy */
+			break;
+
+		case parrot_image_meta::BGR:
+			rect_image = cv::Mat(info->height, info->width, CV_8UC3, image_data);
+			break;
+
+		case parrot_image_meta::RGB:
+			cv::cvtColor(cv::Mat(info->height, info->width, CV_8UC3, image_data),
+			             rect_image,
+			             cv::COLOR_RGB2BGR); /* conversion and copy */
+			break;
+
+		default:
+			return;
+		}
+	}
+
+	/* paint rectangle on target image */
+	for (auto face_rect : p->faces) {
+		/* scale face rectangle to full resolution */
+		cv::Rect scaled(face_rect.x * scale, face_rect.y * scale,
+		                face_rect.width * scale, face_rect.height * scale);
+
+		//cv::rectangle(orig, scaled, cv::Scalar(255), CV_FILLED);
+		cv::rectangle(rect_image, scaled, cv::Scalar(255), 2);
+		cv::putText(rect_image, "chelou celui-la", cv::Point(scaled.x, scaled.y - 20),
 		            cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 2);
 
 		//doMosaic(src_img, r->x, r->y, r->width, r->height, 20);
+	}
+
+#ifdef DEBUG
+	cv::imshow("Capture", rect_image);
+	cv::waitKey(10);
+#endif
+
+	/* convert back (if necessary) */
+
+	/* create target image */
+	switch (mode) {
+	case ONLY_RECT:
+		/* TODO - blend over or just give back this buffer ? */
+		break;
+
+	case OVERLAY_EVEN_WITH_EXPENSIVE_COPY:
+		switch (info->image_format) {
+		case parrot_image_meta::YUYV:
+			/* TODO manual conversion to YUYV ? */
+			//cv::cvtColor(rect_image,
+			//			 cv::Mat(info->height, info->width, CV_8UC2, image_data),
+			//             cv::COLOR_BGR2); /* conversion and copy */
+			break;
+
+		case parrot_image_meta::BGR:
+			/* nothing to be done ;-) \O/ */
+			break;
+
+		case parrot_image_meta::RGB:
+			cv::cvtColor(rect_image,
+			             cv::Mat(info->height, info->width, CV_8UC3, image_data),
+			             cv::COLOR_BGR2RGB);
+			break;
+
+		default:
+			return;
+		}
 	}
 }
 
