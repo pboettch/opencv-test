@@ -1,7 +1,7 @@
 /* this is not-working pseudo code */
 
-#include "parrot-pimp-snap-plugin.h"
 #include "parrot-image-process.h"
+#include "parrot-pimp-snap-plugin.h"
 
 #include "face-detect.h"
 

@@ -17,5 +17,4 @@ void face_detect_exit(void *context);
 }
 #endif
 
-
 #endif /* FACE_DETECT_H__ */

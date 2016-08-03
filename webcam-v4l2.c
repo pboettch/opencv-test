@@ -23,8 +23,8 @@
 
 #include <linux/videodev2.h>
 
-#include "parrot-image-process.h"
 #include "face-detect.h"
+#include "parrot-image-process.h"
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
@@ -41,7 +41,6 @@ static int out_buf;
 static int force_format = 1;
 
 static void *face_detect_context;
-
 
 static void errno_exit(const char *s)
 {
@@ -204,7 +203,7 @@ static void init_device(void)
 		fmt.fmt.pix.width = 1280;
 		fmt.fmt.pix.height = 720;
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
-//		fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
+		//		fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
 
 		if (-1 == xioctl(fd, VIDIOC_S_FMT, &fmt))
 			errno_exit("VIDIOC_S_FMT");
@@ -280,12 +279,12 @@ static int read_frame(void)
 	    .width = 1280,
 	    .height = 720,
 	    .image_format = YUYV, /* YUYV 4.2.2 */
-		.buffer_size = buf.bytesused,
+	    .buffer_size = buf.bytesused,
 	};
 
 	face_detect_work(buffers[buf.index].start, &meta, face_detect_context);
 
-//	write(1, buffers[buf.index].start, buf.bytesused);
+	//	write(1, buffers[buf.index].start, buf.bytesused);
 
 	if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
 		errno_exit("VIDIOC_QBUF");
@@ -375,7 +374,6 @@ int main(int argc, char **argv)
 	uninit_device();
 	close_device();
 	face_detect_exit(face_detect_context);
-
 
 	return 0;
 }
