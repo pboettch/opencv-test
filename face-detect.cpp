@@ -115,7 +115,7 @@ extern "C" void face_detect_work(void *image_data,
 			             cv::COLOR_YUV2BGR_YUYV); /* conversion and copy */
 			break;
 
-		case parrot_image_meta::BGR:
+		case parrot_image_meta::BGR: /* well BGR is not at all expensive - no copy */
 			rect_image = cv::Mat(info->height, info->width, CV_8UC3, image_data);
 			break;
 
