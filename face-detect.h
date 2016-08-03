@@ -10,8 +10,8 @@ struct parrot_image_meta;
 void *face_detect_init();
 void face_detect_work(void *image_data,
                       const struct parrot_image_meta *info,
-                      void *priv);
-void face_detect_exit(void *p);
+                      void *context);
+void face_detect_exit(void *context);
 
 #ifdef __cplusplus
 }
