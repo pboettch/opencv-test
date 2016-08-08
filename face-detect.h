@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-struct parrot_image_meta;
+#include <gst/video/video.h>
 
 void *face_detect_init();
-void face_detect_work(void *image_data,
-                      const struct parrot_image_meta *info,
+void face_detect_work(void *image_data, unsigned int bufsize,
+                      GstVideoFormat videoformat, unsigned int width, unsigned int height,
                       void *context);
 void face_detect_exit(void *context);
 

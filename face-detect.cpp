@@ -1,13 +1,14 @@
-#include <opencv2/imgproc/imgproc.hpp> /* for equalizeHist */
-#include <opencv2/opencv.hpp>
-
 #include <sstream>
 #include <vector>
+#include <iostream>
+#include <unistd.h>
+
+#include <opencv2/opencv.hpp>
+#include <opencv2/imgproc/imgproc.hpp> /* for equalizeHist */
 
 #include "face-detect.h"
-#include "parrot-image-process.h" /* for parrot_image_meta-struct */
+#include "parrot-image-process.h"
 
-#include <unistd.h>
 
 // #define DEBUG
 
@@ -47,27 +48,25 @@ extern "C" void *face_detect_init()
 	return p;
 }
 
-extern "C" void face_detect_work(void *image_data,
-                                 const struct parrot_image_meta *info,
-                                 void *priv)
+extern "C" void face_detect_work(void *image_data, unsigned int bufsize, GstVideoFormat videoformat, unsigned int width, unsigned int height, void *priv)
 {
 	struct user_priv *p = reinterpret_cast<struct user_priv *>(priv);
 
-	double scale = info->width / 320.0; // width of image where the detection will take place
+	double scale = width / 320.0; // width of image where the detection will take place
 
 	/* only do facedetction once every X images */
 	if (p->skip_count-- <= 0) {
 		cv::Mat source;
 		int cvt_code;
 
-		switch (info->image_format) {
+		switch (videoformat) {
 		case parrot_image_meta::YUYV:
-			source = cv::Mat(info->height, info->width, CV_8UC2, image_data);
+			source = cv::Mat(height, width, CV_8UC2, image_data);
 			cvt_code = CV_YUV2GRAY_YUYV;
 			break;
 
-		case parrot_image_meta::BGR:
-			source = cv::Mat(info->height, info->width, CV_8UC3, image_data);
+		case GST_VIDEO_FORMAT_BGR:
+			source = cv::Mat(height, width, CV_8UC3, image_data);
 			cvt_code = CV_BGR2GRAY;
 			break;
 
@@ -81,7 +80,7 @@ extern "C" void face_detect_work(void *image_data,
 		cv::cvtColor(source, gray, cvt_code);
 
 		/* face detectiong works on very small images -> resize it */
-		cv::resize(gray, gray, cv::Size(info->width / scale, info->height / scale));
+		cv::resize(gray, gray, cv::Size(width / scale, height / scale));
 		cv::equalizeHist(gray, gray);
 
 #ifdef DEBUG
@@ -104,23 +103,23 @@ extern "C" void face_detect_work(void *image_data,
 	/* create target image */
 	switch (mode) {
 	case ONLY_RECT:
-		rect_image = cv::Mat::zeros(info->height, info->width, CV_8UC3);
+		rect_image = cv::Mat::zeros(height, width, CV_8UC3);
 		break;
 
 	case OVERLAY_EVEN_WITH_EXPENSIVE_COPY:
-		switch (info->image_format) {
+		switch (videoformat) {
 		case parrot_image_meta::YUYV:
-			cv::cvtColor(cv::Mat(info->height, info->width, CV_8UC2, image_data),
+			cv::cvtColor(cv::Mat(height, width, CV_8UC2, image_data),
 			             rect_image,
 			             cv::COLOR_YUV2BGR_YUYV); /* conversion and copy */
 			break;
 
-		case parrot_image_meta::BGR: /* well BGR is not at all expensive - no copy */
-			rect_image = cv::Mat(info->height, info->width, CV_8UC3, image_data);
+		case GST_VIDEO_FORMAT_BGR: /* well BGR is not at all expensive - no copy */
+			rect_image = cv::Mat(height, width, CV_8UC3, image_data);
 			break;
 
 		case parrot_image_meta::RGB:
-			cv::cvtColor(cv::Mat(info->height, info->width, CV_8UC3, image_data),
+			cv::cvtColor(cv::Mat(height, width, CV_8UC3, image_data),
 			             rect_image,
 			             cv::COLOR_RGB2BGR); /* conversion and copy */
 			break;
@@ -158,11 +157,11 @@ extern "C" void face_detect_work(void *image_data,
 		break;
 
 	case OVERLAY_EVEN_WITH_EXPENSIVE_COPY:
-		switch (info->image_format) {
+		switch (videoformat) {
 		case parrot_image_meta::YUYV:
 			/* TODO manual conversion to YUYV ? */
 			//cv::cvtColor(rect_image,
-			//			 cv::Mat(info->height, info->width, CV_8UC2, image_data),
+			//			 cv::Mat(height, width, CV_8UC2, image_data),
 			//             cv::COLOR_BGR2); /* conversion and copy */
 			break;
 
@@ -172,7 +171,7 @@ extern "C" void face_detect_work(void *image_data,
 
 		case parrot_image_meta::RGB:
 			cv::cvtColor(rect_image,
-			             cv::Mat(info->height, info->width, CV_8UC3, image_data),
+			             cv::Mat(height, width, CV_8UC3, image_data),
 			             cv::COLOR_BGR2RGB);
 			break;
 
