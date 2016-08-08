@@ -1,16 +1,15 @@
-#include <sstream>
-#include <vector>
 #include <iostream>
+#include <sstream>
 #include <unistd.h>
+#include <vector>
 
-#include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/imgproc.hpp> /* for equalizeHist */
+#include <opencv2/opencv.hpp>
 
 #include "face-detect.h"
 #include "parrot-image-process.h"
 
-
-// #define DEBUG
+#define DEBUG
 
 struct user_priv {
 	cv::CascadeClassifier cascade;
@@ -60,7 +59,7 @@ extern "C" void face_detect_work(void *image_data, unsigned int bufsize, GstVide
 		int cvt_code;
 
 		switch (videoformat) {
-		case parrot_image_meta::YUYV:
+		case GST_VIDEO_FORMAT_YUY2:
 			source = cv::Mat(height, width, CV_8UC2, image_data);
 			cvt_code = CV_YUV2GRAY_YUYV;
 			break;
@@ -108,7 +107,7 @@ extern "C" void face_detect_work(void *image_data, unsigned int bufsize, GstVide
 
 	case OVERLAY_EVEN_WITH_EXPENSIVE_COPY:
 		switch (videoformat) {
-		case parrot_image_meta::YUYV:
+		case GST_VIDEO_FORMAT_YUY2: /* == YUYV */
 			cv::cvtColor(cv::Mat(height, width, CV_8UC2, image_data),
 			             rect_image,
 			             cv::COLOR_YUV2BGR_YUYV); /* conversion and copy */
@@ -118,7 +117,7 @@ extern "C" void face_detect_work(void *image_data, unsigned int bufsize, GstVide
 			rect_image = cv::Mat(height, width, CV_8UC3, image_data);
 			break;
 
-		case parrot_image_meta::RGB:
+		case GST_VIDEO_FORMAT_RGB:
 			cv::cvtColor(cv::Mat(height, width, CV_8UC3, image_data),
 			             rect_image,
 			             cv::COLOR_RGB2BGR); /* conversion and copy */
@@ -158,18 +157,18 @@ extern "C" void face_detect_work(void *image_data, unsigned int bufsize, GstVide
 
 	case OVERLAY_EVEN_WITH_EXPENSIVE_COPY:
 		switch (videoformat) {
-		case parrot_image_meta::YUYV:
+		case GST_VIDEO_FORMAT_YUY2: /* == YUYV */
 			/* TODO manual conversion to YUYV ? */
 			//cv::cvtColor(rect_image,
 			//			 cv::Mat(height, width, CV_8UC2, image_data),
 			//             cv::COLOR_BGR2); /* conversion and copy */
 			break;
 
-		case parrot_image_meta::BGR:
+		case GST_VIDEO_FORMAT_BGR:
 			/* nothing to be done ;-) \O/ */
 			break;
 
-		case parrot_image_meta::RGB:
+		case GST_VIDEO_FORMAT_RGB:
 			cv::cvtColor(rect_image,
 			             cv::Mat(height, width, CV_8UC3, image_data),
 			             cv::COLOR_BGR2RGB);

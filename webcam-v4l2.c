@@ -282,7 +282,11 @@ static int read_frame(void)
 	    .buffer_size = buf.bytesused,
 	};
 
-	face_detect_work(buffers[buf.index].start, &meta, face_detect_context);
+	face_detect_work(buffers[buf.index].start, buf.bytesused,
+	                 GST_VIDEO_FORMAT_YUY2,
+	                 1280,
+	                 720,
+	                 face_detect_context);
 
 	//	write(1, buffers[buf.index].start, buf.bytesused);
 

@@ -19,14 +19,16 @@ int main(int argc, char **argv)
 		cv::Mat frame;
 		cap >> frame; // get a new frame from camera
 
-		struct parrot_image_meta meta = {
-		    .width = static_cast<size_t>(frame.cols),
-		    .height = static_cast<size_t>(frame.rows),
-		    .image_format = parrot_image_meta::BGR,
-		    .buffer_size = frame.elemSize() * frame.total(),
-		};
+void face_detect_work(void *image_data, unsigned int bufsize,
+                      GstVideoFormat videoformat, unsigned int width, unsigned int height,
+                      void *context);
 
-		face_detect_work(frame.ptr(), &meta, user_context);
+		face_detect_work(frame.ptr(),
+		                 frame.elemSize() * frame.total(),
+						 GST_VIDEO_FORMAT_BGR,
+		                 static_cast<size_t>(frame.cols),
+		                 static_cast<size_t>(frame.rows),
+		                 user_context);
 
 		//		cv::imshow("Capture", frame);
 		if (cv::waitKey(30) >= 0)

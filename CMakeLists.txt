@@ -6,9 +6,13 @@ set(CMAKE_CXX_FLAGS "-Wall")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} /usr/share/opencv)
 find_package(OpenCV REQUIRED)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+find_package(GStreamer REQUIRED)
+
 # face-detect-library with the 'well-defined' interface
 add_library(face-detect face-detect.cpp)
-target_link_libraries(face-detect PRIVATE ${OpenCV_LIBS})
+target_include_directories(face-detect PUBLIC ${GSTREAMER_INCLUDE_DIRS})
+target_link_libraries(face-detect PRIVATE ${OpenCV_LIBS} ${GSTREAMER_LIBRARIES})
 target_compile_features(face-detect PRIVATE cxx_range_for) # C++11
 
 # face-detect-test using the webcam and OpenCV to read from it

@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-#include <gst/video/video.h>
+#include <gst/video/video-format.h>
 
 void *face_detect_init();
 void face_detect_work(void *image_data, unsigned int bufsize,
