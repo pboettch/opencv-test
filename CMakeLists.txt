@@ -13,9 +13,21 @@ find_package(GStreamer REQUIRED)
 add_library(ulog INTERFACE)
 target_include_directories(ulog INTERFACE ulog/)
 
-# import libraries
-add_subdirectory(../libmuta muta EXCLUDE_FROM_ALL)
-add_subdirectory(../libpomp pomp EXCLUDE_FROM_ALL)
+# import pomp
+add_subdirectory(../libpomp pomp-dir EXCLUDE_FROM_ALL)
+
+# create libmuta here
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../libmuta/src/muta.c)
+    message(FATAL_ERROR "This project needs libmuta available at ${CMAKE_CURRENT_SOURCE_DIR}/../")
+endif()
+
+add_library(muta ../libmuta/src/muta.c)
+target_include_directories(muta PUBLIC ../libmuta/include)
+
+target_link_libraries(muta
+    PUBLIC gstreamer
+    PRIVATE ulog pomp
+)
 
 # face-detect-library with the 'well-defined' interface
 add_library(face-detect face-detect.cpp)
