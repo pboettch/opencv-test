@@ -8,9 +8,10 @@
 
 int main(void)
 {
-	void *context;
+	void *context = face_detect_init();
+	if (!context)
+		return EXIT_FAILURE;
 
-	context = face_detect_init();
 	muta_connect(face_detect_work, context);
 	face_detect_exit(context);
 
