@@ -8,11 +8,11 @@
 
 int main(void)
 {
-  void *context;
+	void *context;
 
-  context = face_detect_init();
-  muta_connect(face_detect_work, context);
-  face_detect_exit(context);
+	context = face_detect_init();
+	muta_connect(face_detect_work, context);
+	face_detect_exit(context);
 
-  return EXIT_SUCCESS;
+	return EXIT_SUCCESS;
 }

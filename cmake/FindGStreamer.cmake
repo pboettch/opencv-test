@@ -129,3 +129,7 @@ mark_as_advanced(
     GSTREAMER_VIDEO_INCLUDE_DIRS
     GSTREAMER_VIDEO_LIBRARIES
 )
+
+add_library(gstreamer INTERFACE)
+target_link_libraries(gstreamer INTERFACE ${GSTREAMER_LIBRARIES})
+target_include_directories(gstreamer INTERFACE ${GSTREAMER_INCLUDE_DIRS})
