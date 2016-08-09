@@ -36,7 +36,7 @@ if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../gst-parrot-userfilter)
     message(FATAL_ERROR "This project needs the gst-parrot-userfilter available at ${CMAKE_CURRENT_SOURCE_DIR}/../")
 endif()
 add_library(gst-parrot-userfilter MODULE ../gst-parrot-userfilter/userfilter.c)
-target_link_libraries(gst-parrot-userfilter PRIVATE gstreamer pomp)
+target_link_libraries(gst-parrot-userfilter PRIVATE gstreamer pomp muta)
 target_include_directories(gst-parrot-userfilter PRIVATE ../gst-parrot-userfilter)
 target_compile_definitions(gst-parrot-userfilter PRIVATE GST_USE_UNSTABLE_API)
 
