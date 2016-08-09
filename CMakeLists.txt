@@ -9,12 +9,13 @@ find_package(OpenCV REQUIRED)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 find_package(GStreamer REQUIRED)
 
-# local ulog - FIXME
+# local ulog :-( - shame! FIXME
 add_library(ulog INTERFACE)
 target_include_directories(ulog INTERFACE ulog/)
 
 # import pomp
 add_subdirectory(../libpomp pomp-dir EXCLUDE_FROM_ALL)
+
 
 # create libmuta here
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../libmuta/src/muta.c)
@@ -28,6 +29,16 @@ target_link_libraries(muta
     PUBLIC gstreamer
     PRIVATE ulog pomp
 )
+
+
+# create gstreamer-parrot-user-plugin here
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../gst-parrot-userfilter)
+    message(FATAL_ERROR "This project needs the gst-parrot-userfilter available at ${CMAKE_CURRENT_SOURCE_DIR}/../")
+endif()
+add_library(gst-parrot-userfilter MODULE ../gst-parrot-userfilter/userfilter.c)
+target_link_libraries(gst-parrot-userfilter PRIVATE gstreamer pomp)
+target_include_directories(gst-parrot-userfilter PRIVATE ../gst-parrot-userfilter)
+
 
 # face-detect-library with the 'well-defined' interface
 add_library(face-detect face-detect.cpp)
