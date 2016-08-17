@@ -1,10 +1,9 @@
 export GST_PLUGIN_PATH=.
 
-gst-launch-1.0 -vvv \
+# io-mode=0 ! \
+gst-launch-1.0 -v --gst-debug=3,myfilter*:6 \
 	v4l2src io-mode=4 ! \
-	'video/x-raw, width=640, height=360, format=YUY2' ! \
-	myfilter ! \
-	xvimagesink sync=false -vvv
+	'video/x-raw, width=1280, height=720, format=YUY2' ! \
+	videoconvert ! \
+	autovideosink
 
-#		videoconvert ! \
-#		videoconvert ! \
