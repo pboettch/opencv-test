@@ -58,7 +58,7 @@ extern "C" void face_detect_work(void *image_data, unsigned int bufsize,
                                  GstVideoFormat videoformat, unsigned int width, unsigned int height, void *priv)
 {
 	struct user_priv *p = reinterpret_cast<struct user_priv *>(priv);
-	double scale = width / 320.0; // width of image where the detection will take place
+	double scale = width / 400.0; // width of image where the detection will take place
 
 	/* only do facedetction once every X images */
 	if (p->skip_count-- <= 0) {
