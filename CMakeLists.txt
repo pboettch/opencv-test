@@ -41,9 +41,6 @@ target_include_directories(gst-parrot-userfilter PRIVATE ../gst-parrot-userfilte
 target_compile_definitions(gst-parrot-userfilter PRIVATE GST_USE_UNSTABLE_API)
 
 
-
-
-
 # face-detect-library with the 'well-defined' interface
 add_library(face-detect face-detect.cpp)
 target_include_directories(face-detect PUBLIC .)

@@ -9,7 +9,7 @@
 #include "face-detect.h"
 #include "parrot-image-process.h"
 
-#define DEBUG
+//#define DEBUG
 
 struct user_priv {
 	cv::CascadeClassifier cascade;
@@ -47,10 +47,17 @@ extern "C" void *face_detect_init()
 	return p;
 }
 
-extern "C" void face_detect_work(void *image_data, unsigned int bufsize, GstVideoFormat videoformat, unsigned int width, unsigned int height, void *priv)
+struct yuyv {
+	uint8_t y0;
+	uint8_t u0;
+	uint8_t y1;
+	uint8_t v0;
+};
+
+extern "C" void face_detect_work(void *image_data, unsigned int bufsize,
+                                 GstVideoFormat videoformat, unsigned int width, unsigned int height, void *priv)
 {
 	struct user_priv *p = reinterpret_cast<struct user_priv *>(priv);
-
 	double scale = width / 320.0; // width of image where the detection will take place
 
 	/* only do facedetction once every X images */
@@ -90,94 +97,75 @@ extern "C" void face_detect_work(void *image_data, unsigned int bufsize, GstVide
 		p->cascade.detectMultiScale(gray, p->faces, 1.11, 4, 0, cv::Size(40, 40));
 		p->skip_count = 4;
 	}
+	std::cerr << "found " << p->faces.size() << " faces\n";
 
-	/* output image */
-	cv::Mat rect_image;
+	switch (videoformat) {
+	case GST_VIDEO_FORMAT_YUY2: { /* == YUYV */
+		struct yuyv *source = reinterpret_cast<struct yuyv *>(image_data);
+		int W = width / 2;
 
-	enum {
-		ONLY_RECT,
-		OVERLAY_EVEN_WITH_EXPENSIVE_COPY,
-	} mode = OVERLAY_EVEN_WITH_EXPENSIVE_COPY;
+		/* paint rectangle on target image */
+		for (auto face_rect : p->faces) {
+			cv::Rect scaled(face_rect.x * scale, face_rect.y * scale,
+			                face_rect.width * scale, face_rect.height * scale);
 
-	/* create target image */
-	switch (mode) {
-	case ONLY_RECT:
-		rect_image = cv::Mat::zeros(height, width, CV_8UC3);
-		break;
+			/* line thickness is 2px */
 
-	case OVERLAY_EVEN_WITH_EXPENSIVE_COPY:
-		switch (videoformat) {
-		case GST_VIDEO_FORMAT_YUY2: /* == YUYV */
-			cv::cvtColor(cv::Mat(height, width, CV_8UC2, image_data),
-			             rect_image,
-			             cv::COLOR_YUV2BGR_YUYV); /* conversion and copy */
-			break;
+			/* horizontal lines */
+			for (auto w = scaled.x/2; w < (scaled.x+scaled.width) / 2; w++) {
+				/* top */
+				int p = scaled.y * W + w;
+				source[p].y0 = 255;
+				source[p].y1 = 255;
+				source[p + W].y0 = 255;
+				source[p + W].y1 = 255;
 
-		case GST_VIDEO_FORMAT_BGR: /* well BGR is not at all expensive - no copy */
-			rect_image = cv::Mat(height, width, CV_8UC3, image_data);
-			break;
+				/* bottom */
+				p += scaled.height * W;
+				source[p].y0 = 255;
+				source[p].y1 = 255;
+				source[p + W].y0 = 255;
+				source[p + W].y1 = 255;
+			}
 
-		case GST_VIDEO_FORMAT_RGB:
-			cv::cvtColor(cv::Mat(height, width, CV_8UC3, image_data),
-			             rect_image,
-			             cv::COLOR_RGB2BGR); /* conversion and copy */
-			break;
+			/* vertical lines */
+			for (auto h = scaled.y; h < (scaled.y+scaled.height); h++) {
+				int p = scaled.x/2 + h*W; // left
+				source[p].y0 = 255;
+				source[p].y1 = 255;
 
-		default:
-			return;
+				p += scaled.width/2; // right
+				source[p].y0 = 255;
+				source[p].y1 = 255;
+			}
 		}
-	}
+	} break;
 
-	/* paint rectangle on target image */
-	for (auto face_rect : p->faces) {
-		/* scale face rectangle to full resolution */
-		cv::Rect scaled(face_rect.x * scale, face_rect.y * scale,
-		                face_rect.width * scale, face_rect.height * scale);
+	case GST_VIDEO_FORMAT_BGR: {
+		cv::Mat source = cv::Mat(height, width, CV_8UC3, image_data);
 
-		//cv::rectangle(orig, scaled, cv::Scalar(255), CV_FILLED);
-		cv::rectangle(rect_image, scaled, cv::Scalar(255), 2);
-		cv::putText(rect_image, "chelou celui-la", cv::Point(scaled.x, scaled.y - 20),
-		            cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 2);
+		/* paint rectangle on target image */
+		for (auto face_rect : p->faces) {
+			/* scale face rectangle to full resolution */
+			cv::Rect scaled(face_rect.x * scale, face_rect.y * scale,
+			                face_rect.width * scale, face_rect.height * scale);
 
-		//doMosaic(src_img, r->x, r->y, r->width, r->height, 20);
-	}
+			//cv::rectangle(orig, scaled, cv::Scalar(255), CV_FILLED);
+			cv::rectangle(source, scaled, cv::Scalar(255), 2);
+			cv::putText(source, "chelou celui-la", cv::Point(scaled.x, scaled.y - 20),
+			            cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 2);
 
-#ifdef DEBUG
-	cv::imshow("Capture", rect_image);
-	cv::waitKey(10);
-#endif
-
-	/* convert back (if necessary) */
-
-	/* create target image */
-	switch (mode) {
-	case ONLY_RECT:
-		/* TODO - blend over or just give back this buffer ? */
-		break;
-
-	case OVERLAY_EVEN_WITH_EXPENSIVE_COPY:
-		switch (videoformat) {
-		case GST_VIDEO_FORMAT_YUY2: /* == YUYV */
-			/* TODO manual conversion to YUYV ? */
-			//cv::cvtColor(rect_image,
-			//			 cv::Mat(height, width, CV_8UC2, image_data),
-			//             cv::COLOR_BGR2); /* conversion and copy */
-			break;
-
-		case GST_VIDEO_FORMAT_BGR:
-			/* nothing to be done ;-) \O/ */
-			break;
-
-		case GST_VIDEO_FORMAT_RGB:
-			cv::cvtColor(rect_image,
-			             cv::Mat(height, width, CV_8UC3, image_data),
-			             cv::COLOR_BGR2RGB);
-			break;
-
-		default:
-			return;
+			//doMosaic(src_img, r->x, r->y, r->width, r->height, 20);
 		}
+	} break;
+
+	default:
+		std::cerr << "unsupported colorspace - bailing out\n";
+		return;
 	}
+
+
+
 }
 
 extern "C" void face_detect_exit(void *p)
