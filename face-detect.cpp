@@ -49,23 +49,77 @@ extern "C" void *face_detect_init()
 
 struct yuyv {
 	uint8_t y0;
-	uint8_t u0;
+	uint8_t u;
 	uint8_t y1;
-	uint8_t v0;
+	uint8_t v;
 };
 
-extern "C" void face_detect_work(void *image_data, unsigned int bufsize,
-                                 GstVideoFormat videoformat, unsigned int width, unsigned int height, void *priv)
+struct uyvy {
+	uint8_t u;
+	uint8_t y0;
+	uint8_t v;
+	uint8_t y1;
+};
+
+template <typename T>
+void draw_face_rectangles(T *source, unsigned int width, double scale, const std::vector<cv::Rect> &faces)
 {
-	struct user_priv *p = reinterpret_cast<struct user_priv *>(priv);
+	int W = width / 2;
+
+	/* paint rectangle on target image */
+	for (auto face_rect : faces) {
+		cv::Rect scaled(face_rect.x * scale, face_rect.y * scale,
+		                face_rect.width * scale, face_rect.height * scale);
+
+		/* line thickness is 2px */
+
+		/* horizontal lines */
+		for (auto w = scaled.x / 2; w < (scaled.x + scaled.width) / 2; w++) {
+			/* top */
+			int p = scaled.y * W + w;
+			source[p].y0 = 255;
+			source[p].y1 = 255;
+			source[p + W].y0 = 255;
+			source[p + W].y1 = 255;
+
+			/* bottom */
+			p += scaled.height * W;
+			source[p].y0 = 255;
+			source[p].y1 = 255;
+			source[p + W].y0 = 255;
+			source[p + W].y1 = 255;
+		}
+
+		/* vertical lines */
+		for (auto h = scaled.y; h < (scaled.y + scaled.height); h++) {
+			int p = scaled.x / 2 + h * W; // left
+			source[p].y0 = 255;
+			source[p].y1 = 255;
+
+			p += scaled.width / 2; // right
+			source[p].y0 = 255;
+			source[p].y1 = 255;
+		}
+	}
+}
+
+extern "C" void face_detect_work(void *image_data, unsigned int bufsize,
+                                 GstVideoFormat videoformat, unsigned int width, unsigned int height, void *ctx)
+{
+	struct user_priv *priv = reinterpret_cast<struct user_priv *>(ctx);
 	double scale = width / 400.0; // width of image where the detection will take place
 
 	/* only do facedetction once every X images */
-	if (p->skip_count-- <= 0) {
+	if (priv->skip_count-- <= 0) {
 		cv::Mat source;
 		int cvt_code;
 
 		switch (videoformat) {
+		case GST_VIDEO_FORMAT_UYVY:
+			source = cv::Mat(height, width, CV_8UC2, image_data);
+			cvt_code = CV_YUV2GRAY_UYVY;
+			break;
+
 		case GST_VIDEO_FORMAT_YUY2:
 			source = cv::Mat(height, width, CV_8UC2, image_data);
 			cvt_code = CV_YUV2GRAY_YUYV;
@@ -94,58 +148,25 @@ extern "C" void face_detect_work(void *image_data, unsigned int bufsize,
 		cv::waitKey(10);
 #endif
 
-		p->cascade.detectMultiScale(gray, p->faces, 1.11, 4, 0, cv::Size(40, 40));
-		p->skip_count = 4;
+		priv->cascade.detectMultiScale(gray, priv->faces, 1.11, 4, 0, cv::Size(40, 40));
+		priv->skip_count = 4;
 	}
-	std::cerr << "found " << p->faces.size() << " faces\n";
+	std::cerr << "found " << priv->faces.size() << " faces\n";
 
 	switch (videoformat) {
-	case GST_VIDEO_FORMAT_YUY2: { /* == YUYV */
-		struct yuyv *source = reinterpret_cast<struct yuyv *>(image_data);
-		int W = width / 2;
+	case GST_VIDEO_FORMAT_YUY2:
+		draw_face_rectangles<>(reinterpret_cast<struct yuyv *>(image_data), width, scale, priv->faces);
+		break;
 
-		/* paint rectangle on target image */
-		for (auto face_rect : p->faces) {
-			cv::Rect scaled(face_rect.x * scale, face_rect.y * scale,
-			                face_rect.width * scale, face_rect.height * scale);
-
-			/* line thickness is 2px */
-
-			/* horizontal lines */
-			for (auto w = scaled.x/2; w < (scaled.x+scaled.width) / 2; w++) {
-				/* top */
-				int p = scaled.y * W + w;
-				source[p].y0 = 255;
-				source[p].y1 = 255;
-				source[p + W].y0 = 255;
-				source[p + W].y1 = 255;
-
-				/* bottom */
-				p += scaled.height * W;
-				source[p].y0 = 255;
-				source[p].y1 = 255;
-				source[p + W].y0 = 255;
-				source[p + W].y1 = 255;
-			}
-
-			/* vertical lines */
-			for (auto h = scaled.y; h < (scaled.y+scaled.height); h++) {
-				int p = scaled.x/2 + h*W; // left
-				source[p].y0 = 255;
-				source[p].y1 = 255;
-
-				p += scaled.width/2; // right
-				source[p].y0 = 255;
-				source[p].y1 = 255;
-			}
-		}
-	} break;
+	case GST_VIDEO_FORMAT_UYVY:
+		draw_face_rectangles<>(reinterpret_cast<struct uyvy *>(image_data), width, scale, priv->faces);
+		break;
 
 	case GST_VIDEO_FORMAT_BGR: {
 		cv::Mat source = cv::Mat(height, width, CV_8UC3, image_data);
 
 		/* paint rectangle on target image */
-		for (auto face_rect : p->faces) {
+		for (auto face_rect : priv->faces) {
 			/* scale face rectangle to full resolution */
 			cv::Rect scaled(face_rect.x * scale, face_rect.y * scale,
 			                face_rect.width * scale, face_rect.height * scale);
@@ -163,9 +184,6 @@ extern "C" void face_detect_work(void *image_data, unsigned int bufsize,
 		std::cerr << "unsupported colorspace - bailing out\n";
 		return;
 	}
-
-
-
 }
 
 extern "C" void face_detect_exit(void *p)
