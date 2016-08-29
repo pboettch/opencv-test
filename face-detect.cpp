@@ -47,20 +47,6 @@ extern "C" void *face_detect_init()
 	return p;
 }
 
-struct yuyv {
-	uint8_t y0;
-	uint8_t u;
-	uint8_t y1;
-	uint8_t v;
-};
-
-struct uyvy {
-	uint8_t u;
-	uint8_t y0;
-	uint8_t v;
-	uint8_t y1;
-};
-
 template <typename T>
 void draw_face_rectangles(T *source, unsigned int width, double scale, const std::vector<cv::Rect> &faces)
 {
@@ -71,7 +57,7 @@ void draw_face_rectangles(T *source, unsigned int width, double scale, const std
 		cv::Rect scaled(face_rect.x * scale, face_rect.y * scale,
 		                face_rect.width * scale, face_rect.height * scale);
 
-		/* line thickness is 2px */
+		/* line thickness is 2px setting Y-values to 0xFF for white */
 
 		/* horizontal lines */
 		for (auto w = scaled.x / 2; w < (scaled.x + scaled.width) / 2; w++) {
@@ -125,6 +111,11 @@ extern "C" void face_detect_work(void *image_data, unsigned int bufsize,
 			cvt_code = CV_YUV2GRAY_YUYV;
 			break;
 
+		case GST_VIDEO_FORMAT_I420:
+			source = cv::Mat(height, width, CV_8UC2, image_data);
+			cvt_code = CV_YUV2GRAY_I420;
+			break;
+
 		case GST_VIDEO_FORMAT_BGR:
 			source = cv::Mat(height, width, CV_8UC3, image_data);
 			cvt_code = CV_BGR2GRAY;
@@ -154,13 +145,33 @@ extern "C" void face_detect_work(void *image_data, unsigned int bufsize,
 	std::cerr << "found " << priv->faces.size() << " faces\n";
 
 	switch (videoformat) {
-	case GST_VIDEO_FORMAT_YUY2:
+	case GST_VIDEO_FORMAT_YUY2: {
+		struct yuyv {
+			uint8_t y0;
+			uint8_t u;
+			uint8_t y1;
+			uint8_t v;
+		};
 		draw_face_rectangles<>(reinterpret_cast<struct yuyv *>(image_data), width, scale, priv->faces);
-		break;
+	} break;
 
-	case GST_VIDEO_FORMAT_UYVY:
+	case GST_VIDEO_FORMAT_UYVY: {
+		struct uyvy {
+			uint8_t u;
+			uint8_t y0;
+			uint8_t v;
+			uint8_t y1;
+		};
 		draw_face_rectangles<>(reinterpret_cast<struct uyvy *>(image_data), width, scale, priv->faces);
-		break;
+	} break;
+
+	case GST_VIDEO_FORMAT_I420: {
+		struct i420 {
+			uint8_t y0;
+			uint8_t y1;
+		};
+		draw_face_rectangles<>(reinterpret_cast<struct i420 *>(image_data), width, scale, priv->faces);
+	} break;
 
 	case GST_VIDEO_FORMAT_BGR: {
 		cv::Mat source = cv::Mat(height, width, CV_8UC3, image_data);
