@@ -165,7 +165,7 @@ extern "C" void face_detect_work(void *image_data, unsigned int bufsize,
 		draw_face_rectangles<>(reinterpret_cast<struct uyvy *>(image_data), width, scale, priv->faces);
 	} break;
 
-	case GST_VIDEO_FORMAT_I420: {
+	case GST_VIDEO_FORMAT_I420: { /* should work - needs to be tested with a I420 DMA-buf source */
 		struct i420 {
 			uint8_t y0;
 			uint8_t y1;
